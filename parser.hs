@@ -4,11 +4,11 @@ import AneLexer
 import Text.Parsec
 import Data.HashMap
 
-data VarUnit = I | X VarUnit deriving (Show, Eq)
+data VarUnit = I | X VarUnit deriving (Show, Eq, Ord)
 data TermOrLambda = VarTerm String | VarLambda Lambda deriving Show
 
 data Lambda = Lambda TermBody deriving (Show, Eq)
-data Var = VarName String | VarCode VarUnit deriving (Show, Eq)
+data Var = VarName String | VarCode VarUnit deriving (Show, Eq, Ord)
 data TermBody = FreeVar Var | LambdaTerm Lam | App TermBody TermBody deriving (Show, Eq)
 data Lam = Lam Var TermBody deriving (Show, Eq)
 
@@ -20,8 +20,15 @@ data Operations = CheckFinish Finish
                  | BetaExpasion (String, String, TermOrLambda) 
                  | Recursion (String, String, TermOrLambda) 
                  | Equal (String, String)
+                 | CheckType (String, TypeLambda)
                  | NoHasSideVar String
+                 | Normalization (String, TypeLambda)
                  | Show deriving Show
+
+data Type = Type deriving (Show, Eq, Ord)
+data TypeLambda = TypeLambda TypeLambda TypeLambda | SingleType Type | Undefined | Test deriving (Show, Eq, Ord)
+data TypedTermBody = TypedFreeVar Var TypeLambda | TypedLambdaTerm TypedLam TypeLambda | TypedApp TypedTermBody TypedTermBody TypeLambda deriving (Show, Eq, Ord)
+data TypedLam = TypedLam Var TypedTermBody deriving (Show, Eq, Ord)
 
 type Term = Map String Lambda
 data Definition = Definition String Term [Operations] deriving Show
@@ -86,6 +93,42 @@ consumesApplyTerms= consumesOperationWithOneArgument "Apply-Terms" >>= (\x -> re
 consumesHasSideVar :: Parsec String st Operations
 consumesHasSideVar = consumesOperationWithOneArgument "Reducible" >>= (\x -> return (NoHasSideVar x))
 
+consumesTypeNotation :: Parsec String st TypeLambda
+consumesTypeNotation = between (char '(') (char ')') fx
+  where fx = do
+              k <- try consumesTypeNotation <|> ((char '*') >>= (\_ -> return (SingleType Type)))
+              (with_spaces (return ()))
+              (string "->")
+              (with_spaces (return ()))
+              e <- try consumesTypeNotation <|> ((char '*') >>= (\_ -> return (SingleType Type)))
+              return (TypeLambda k e)
+
+consumesTypeChecker :: Parsec String st Operations
+consumesTypeChecker = do
+                    (string "Type of") 
+                    (space)
+                    (with_spaces (return ()))
+                    t <- many letter
+                    (space)
+                    (string "is")
+                    (space)
+                    (with_spaces (return ()))
+                    t_ <- consumesTypeNotation
+                    return (CheckType (t, t_))
+
+consumesNormalization :: Parsec String st Operations
+consumesNormalization = do
+                    (string "Normalization of") 
+                    (space)
+                    (with_spaces (return ()))
+                    t <- many letter
+                    (space)
+                    (string "strongly by")
+                    (space)
+                    (with_spaces (return ()))
+                    t_ <- consumesTypeNotation
+                    return (Normalization (t, t_))
+
 consumesEquality :: Parsec String st Operations
 consumesEquality = do
                    (string "Equal")
@@ -126,7 +169,7 @@ consumesRecursiveApply = (consumesBetaOperations "Recursive-Apply") >>= (\t -> r
 
 getOps :: Parsec String st Operations
 getOps = do
-           f <- choice [try consumeFinish, try consumesApply, try consumesRecursiveApply, try consumesBetaReduction, try consumesEquality, try consumesHasSideVar, try consumesApplyTerms, (string "Show") >> (return Show)]
+           f <- choice [try consumeFinish, try consumesApply, try consumesRecursiveApply, try consumesBetaReduction, try consumesEquality, try consumesHasSideVar, try consumesApplyTerms, try consumesTypeChecker, try consumesNormalization, (string "Show") >> (return Show)]
            (with_spaces (point (return ())))
            return f
 

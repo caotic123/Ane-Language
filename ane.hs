@@ -1,9 +1,12 @@
 import AneParser
 import Data.Bool
 import Data.HashMap
+import Data.Map (Map)
+import System.Environment
+import qualified Data.Map as Mapped
 
 data Correctly = Yes | No deriving Show
-data Assumptions = Assume_Equal String String Correctly | Assume_Reducible String Correctly |Assume_Finish String Correctly deriving Show
+data Assumptions = Assume_Equal String String Correctly | Assume_Reducible String Correctly |Assume_Finish String Correctly | Show [String] deriving Show
 
 data Erros = Erros [String] deriving Show
 data State = State [Assumptions] Erros deriving Show
@@ -11,7 +14,7 @@ data State = State [Assumptions] Erros deriving Show
 there_term :: Definition -> String -> Bool
 there_term (Definition y m k) x = member x m
 
-substituteByidenty :: TermBody -> (Map String VarUnit) -> VarUnit -> TermBody
+substituteByidenty :: TermBody -> (Data.HashMap.Map String VarUnit) -> VarUnit -> TermBody
 substituteByidenty k m i = case k of
                          (LambdaTerm ks) -> (transform_identy_lambda (LambdaTerm ks) m i)
                          (FreeVar p) -> case p of
@@ -20,7 +23,7 @@ substituteByidenty k m i = case k of
                          (App a a_) -> (App (substituteByidenty a m i) (substituteByidenty a_ m i)) 
 
 
-transform_identy_lambda :: TermBody -> (Map String VarUnit) -> VarUnit -> TermBody
+transform_identy_lambda :: TermBody -> (Data.HashMap.Map String VarUnit) -> VarUnit -> TermBody
 transform_identy_lambda k m i__ = case k of
                                   (LambdaTerm (Lam (VarName y) k)) -> LambdaTerm (Lam (VarCode i__) (substituteByidenty k (insert y i__ m) (X i__)))                 
                                   (App a a_) -> (App (transform_identy_lambda a m i__) (transform_identy_lambda a_ m i__))
@@ -168,6 +171,89 @@ checkFinish (Definition x_ terms (yy : y)) (State a (Erros s)) xy = do
 --applyFinishTerm :: Definition -> State -> Finish -> (Definition, State)
 --applyTermsInLambaTerm (Definition k terms (yy : y)) (State a (Erros s)) fi = 
 
+getTypeApplicationType :: TypeLambda -> TypeLambda
+getTypeApplicationType k = case k of
+                             (TypeLambda x y) -> x
+                             _ -> Undefined
+
+getTypeTransformationType :: TypeLambda -> TypeLambda
+getTypeTransformationType k = case k of
+                             (TypeLambda x y) -> y
+                             _ -> Undefined
+
+checkLambdaType :: TermBody -> TypeLambda -> TypedTermBody
+checkLambdaType t (SingleType Type) = do
+                        let k = SingleType Type
+                        case t of
+                          (LambdaTerm (Lam a y)) -> (TypedLambdaTerm (TypedLam a (checkLambdaType y k)) Undefined)
+                          (App a b) -> (TypedApp (checkLambdaType a k) (checkLambdaType b k) Undefined)
+                          (FreeVar x) -> (TypedFreeVar x Undefined)
+      
+checkLambdaType t (TypeLambda e k) = case t of
+                        (LambdaTerm (Lam a y)) -> (TypedLambdaTerm (TypedLam a (checkLambdaType y k)) (TypeLambda e k))
+                        (App a b) -> (TypedApp (checkLambdaType a k) (checkLambdaType b k) Undefined)
+                        (FreeVar x) -> (TypedFreeVar x Undefined)  
+
+getType :: TypedTermBody-> TypeLambda
+getType t_q = case t_q of
+                (TypedLambdaTerm _ p) -> p
+                (TypedApp _ _ a) -> a
+                (TypedFreeVar _ x) -> x
+
+reallyTypeable m a = case (Mapped.lookup a m) of
+                       Just x -> x
+                       Nothing -> Undefined
+
+structLambdaTypes :: TypedTermBody -> Mapped.Map Var TypeLambda -> TypedTermBody
+structLambdaTypes t map_typevar = case t of
+                                   (TypedLambdaTerm (TypedLam a y) ty) -> (TypedLambdaTerm (TypedLam a (structLambdaTypes y (Mapped.insert a ty map_typevar))) ty)
+                                   (TypedApp (TypedFreeVar a a_) g_app _) -> 
+                                      do
+                                        let c = structLambdaTypes (TypedFreeVar a a_) map_typevar
+                                        (TypedApp c (structLambdaTypes g_app map_typevar) (getTypeTransformationType (getType c)))
+                                   (TypedApp (TypedApp a b ntype) c f) ->
+                                    do 
+                                      let app_ = structLambdaTypes (TypedApp a b ntype) map_typevar
+                                      (TypedApp app_ (structLambdaTypes c map_typevar) (getTypeTransformationType (getType app_)))
+                                   (TypedApp c (TypedApp a b ntype) f) ->
+                                    do 
+                                       let app_ = structLambdaTypes (TypedApp a b ntype) map_typevar
+                                       (TypedApp (structLambdaTypes c map_typevar) app_ (getTypeTransformationType (getType app_)))
+                                   (TypedApp d k n) -> 
+                                    do
+                                       let q = structLambdaTypes d map_typevar
+                                       (TypedApp q (structLambdaTypes k map_typevar) (getTypeTransformationType (getType q)))
+                                   (TypedFreeVar a Undefined) -> (TypedFreeVar a (getTypeApplicationType (reallyTypeable map_typevar a)))
+                                   (TypedFreeVar a b) -> (TypedFreeVar a b)
+                                   
+                                   
+checkAllTypedTerms :: TypedTermBody -> [String] -> [String]
+checkAllTypedTerms k y = do 
+                           let error_msg w x k = if ((x == k) && (x /= Undefined && k /= Undefined)) then [] ++ y else ["A typed term were found wrong"] ++ y 
+                           case k of
+                             (TypedLambdaTerm (TypedLam a y) t) -> checkAllTypedTerms y (error_msg ((TypedLam a y), y) (getTypeTransformationType t) (getType y))
+                             (TypedApp (TypedFreeVar d a) a_ type_app) -> (checkAllTypedTerms (TypedFreeVar d a) (error_msg ((TypedFreeVar d a), a_) (getTypeApplicationType a) (getType a_))) ++ (checkAllTypedTerms a_ (error_msg ((TypedFreeVar d a), a_) (getTypeApplicationType a) (getType a_)))  
+                             (TypedApp (TypedLambdaTerm (TypedLam n z) a) a_ type_app) -> (checkAllTypedTerms (TypedLambdaTerm (TypedLam n z) a) (error_msg ((TypedLambdaTerm (TypedLam n z) a), a_) (getTypeApplicationType a) (getType a_))) ++ (checkAllTypedTerms a_ (error_msg ((TypedLambdaTerm (TypedLam n z) a, a_)) (getTypeApplicationType a) (getType a_)))     
+                             (TypedApp u a_ type_app) -> (checkAllTypedTerms u (error_msg (u, a_) (getTypeApplicationType (getType u)) (getType a_))) ++ (checkAllTypedTerms a_ (error_msg (u, a_) (getTypeApplicationType (getType u)) (getType a_)))                              
+                             (TypedFreeVar x t) -> y
+
+applyWithStronglyNormalization ::TermBody -> TermBody
+applyWithStronglyNormalization k = case (k == applyInLambda k) of
+                                     True -> k
+                                     False -> applyWithStronglyNormalization (applyInLambda k)
+
+print_lambda :: TermBody -> String
+print_lambda (FreeVar y) = (getVarIdentyName y)
+print_lambda (App x y) = "[" ++ (print_lambda x) ++ " apply in " ++ (print_lambda y) ++ "]"
+print_lambda (LambdaTerm (Lam x y)) = "(fun" ++ (getVarIdentyName x) ++ " -> " ++ (print_lambda y) ++  ")"
+
+showTerms :: [TermBody] -> [String]
+showTerms terms = case terms of
+                     (x_ : xs) -> (print_lambda x_) : (showTerms xs)
+                     [] -> []
+
+force :: Lambda -> TermBody
+force (Lambda k) = k
 
 applyOperarations :: (Definition, State) -> (Definition, State)
 applyOperarations ((Definition k terms []), b) = ((Definition k terms []), b)
@@ -182,22 +268,70 @@ applyOperarations ((Definition k terms (z : zs)), (State a (Erros s))) = applyOp
                                                      Apply x -> applyWholeApplicationInTerm (Definition k terms (z : zs)) (State a (Erros s)) x
                                                      ApplyTerms y -> applyTermsInLambaTerm (Definition k terms (z : zs)) (State a (Erros s)) y
                                                      CheckFinish h -> case (checkFinish (Definition k terms (z : zs)) (State a (Erros s)) h) of
-                                                                        Right x -> x
-                                                                        Left a_ -> ((Definition k terms zs), (State a (Erros (a_ : s))))
+                                                      Right x -> x
+                                                      Left a_ -> ((Definition k terms zs), (State a (Erros (a_ : s))))
+                                                     CheckType (term, type_notation) -> ((Definition k terms zs), (State a (Erros ((check_type term type_notation) ++ s))))
+                                                     Normalization (p, q) -> case (check_type p q) of
+                                                      [] -> ((Definition k (insert k (Lambda (applyWithStronglyNormalization (force (terms ! k)))) terms) zs), (State a (Erros s)))
+                                                      (x : xs) -> ((Definition k terms zs), (State a (Erros ((x : xs) ++ s))))
+                                                     Show -> ((Definition k terms zs), (State a (Erros ((x : xs) ++ s))))
+                                                                                       
                                                      _ -> ((Definition k terms zs), (State a (Erros s))))
+   where 
+      check_type term type_notation = 
+        do
+         let u k = checkLambdaType (lambda_identy (force k)) type_notation
+         case (getTermLambda term terms) of
+           Just x -> checkAllTypedTerms (structLambdaTypes (u x) (Mapped.empty)) []
+           Nothing -> ["Term " ++ term ++ " don't found"]
+
+print_assumptions :: Correctly -> [Assumptions] -> IO Correctly
+print_assumptions d [] = return d
+print_assumptions t (x : xs) = case x of
+                                Assume_Equal x y z -> 
+                                 case z of
+                                    No -> 
+                                        putStrLn (x ++ " isn't equal a " ++ y) >> print_assumptions No xs
+                                    Yes -> print_assumptions No xs
+                                Assume_Reducible x y -> 
+                                 case y of
+                                    No -> 
+                                       putStrLn (x ++ " can't be reducible") >> print_assumptions No xs
+                                    Yes -> print_assumptions t xs
+                                Assume_Finish x y -> 
+                                 case y of
+                                    No -> 
+                                       putStrLn (x ++ " can't be finish") >> print_assumptions No xs
+                                    Yes -> print_assumptions t xs
 
 printState :: State -> IO ()
 printState (State a (Erros [])) = return ()
 printState (State a (Erros (x : xs))) = putStrLn x >> printState (State a (Erros xs))
 
+check_definition (Definition name_def b y) = do
+  case (snd (applyOperarations ((Definition name_def b y), (State [] (Erros []))))) of
+     (State a (Erros [])) -> do
+       x_ <- print_assumptions Yes a 
+       case x_ of
+           Yes -> return ()
+           No ->  putStrLn ("Asserts are wrong\nFail in check definition of " ++ name_def)
+     (State a (Erros x_)) -> print_assumptions Yes a >> printState (State a (Erros x_)) >> putStrLn ("Asserts are wrong\nFail in check definition " ++ name_def)
+
+check_definitions n = do
+   case n of
+     ((Definition x y z) : xs) -> check_definition (Definition x y z) >> check_definitions xs
+     [] -> return ()
+
+start_ane y = do
+   case (getAneAST y) of
+      Right (AST x) -> check_definitions x >> putStrLn "Ane finished"
+      Left x -> x
+
 main = do
-         let tests (AST ((Definition x z k) : xs)) = do
-                                                     let lambda (Lambda k) = k
-                                                     lambda (z ! "retx") 
-         let test (AST ((Definition x z k) : xs)) = (Definition x z k)
-         n <- readFile "ane.ane"
-         case (getAneAST n) of
-            Right x -> case (snd (applyOperarations ((test x), (State [] (Erros []))))) of
-                              (State a (Erros [])) -> putStrLn "Ane compiles with sucesso\nAll definitions correct"
-                              (State a (Erros x)) -> printState (State a (Erros x))
-            Left x -> x
+    a <- (getArgs) 
+    case a of
+      (x : xs) -> do
+         f <- readFile (x ++ ".ane")
+         start_ane f
+   
+      _ -> putStrLn "? Ane needs a ane file"
