@@ -1,0 +1,28 @@
+Definition : pair.
+Term pair : λx -> λy -> λf -> λencapsule -> ((f x) y).
+End_Terms.
+
+Reducible pair.
+Type of pair is (* -> (* -> ((* -> (* -> *)) -> (* -> *)))).
+
+Beta-Reduction pair in x in λp -> *.
+Beta-Reduction pair in y in λp -> (* *).
+
+Apply pair.
+Finish as [λx -> λy -> x : (λx -> λp -> *)]
+          [λx -> λy -> y : (λy -> λp -> (* *))].
+End_Definition.
+
+Definition : NaturalNumbers.
+
+Term zero : λx -> x.
+Term S : λf -> λn -> (f n).
+Term One : (λi -> ((S zero) i)).
+Term Second : (λi -> ((S (S zero)) i)).
+Term Three : (λi -> ((S (S (S zero))) i)).
+End_Terms.
+
+Apply-Terms One.
+Apply One.
+Apply One.
+End_Definition.
