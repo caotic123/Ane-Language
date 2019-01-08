@@ -67,7 +67,7 @@ Recursion of Term in Y : Yet not implemented
 Why Ane?
 Ane is a cool name
 
-If need contanct anything just text me :
+If need contact anything just text me :
 camposferreiratiago@gmail.com
 
 
