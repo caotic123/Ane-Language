@@ -4,7 +4,7 @@ Ane is a tool-language to analyze lambda terms that's ensure a real time manipul
 Ane uses total untyped lambda calculus, however you can use typed operations therefore terms can be easily changed and makes assumptions.
 
 For example you need to know if two terms computes in the same way:
-
+```
 Simply Example ::
 Definition : ret.
 Term ret : λx -> λi -> x.
