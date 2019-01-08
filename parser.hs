@@ -41,7 +41,7 @@ with_spaces :: Parsec String st a -> Parsec String st ()
 with_spaces k = (spaces) >> k >> (spaces)
 
 consumeDefinitionName :: Parsec String st Definition
-consumeDefinitionName = ((many letter) >>= (\x -> return (Definition x empty [])))
+consumeDefinitionName = ((many1 letter) >>= (\x -> return (Definition x empty [])))
 
 consumeDefinitionHead = (string "Definition") >> (spaces) >> (char ':') >> (spaces)
 
@@ -60,18 +60,19 @@ consumeComplexFinish (MFinish xs) = between (char '[') (char ']') fx
 
 singleFinish :: Parsec String st Finish
 singleFinish = do
+                   (with_spaces (string ":"))
                    f <- tryConsumesLambdaOrTerm
                    return (Finish f)
 
 consumeFinish :: Parsec String st Operations
 consumeFinish = do
                  (with_spaces (string "Finish as"))
-                 d <- try getManyComplexFinish   <|> singleFinish
+                 d <- try singleFinish <|> getManyComplexFinish
                  return (CheckFinish d)
   where
       f_ (MFinish x) = x
       complex_finish___ = do 
-            f <- (consumeComplexFinish (MFinish [])) 
+            f <- try (consumeComplexFinish (MFinish [])) 
             (spaces)
             return f
       getManyComplexFinish = (many complex_finish___) >>= (\x -> return (foldl1 (\x -> \y -> MFinish ((f_ x) ++ (f_ y))) x))
@@ -223,7 +224,7 @@ parseLambda = do
 getTerm :: Parsec String st (String, Lambda)
 getTerm = do 
              (with_spaces (string "Term"))
-             d <- many letter
+             d <- many1 letter
              (spaces)
              (with_spaces (char ':'))
              parseLambda >>= (\y -> (point (return ())) >>= (\_ -> return (d, y)))

@@ -6,7 +6,7 @@ import System.Environment
 import qualified Data.Map as Mapped
 
 data Correctly = Yes | No deriving Show
-data Assumptions = Assume_Equal String String Correctly | Assume_Reducible String Correctly |Assume_Finish String Correctly | Show [String] deriving Show
+data Assumptions = Assume_Equal String String Correctly | Assume_Reducible String Correctly |Assume_Finish String Correctly | Print [String] deriving Show
 
 data Erros = Erros [String] deriving Show
 data State = State [Assumptions] Erros deriving Show
@@ -245,15 +245,18 @@ applyWithStronglyNormalization k = case (k == applyInLambda k) of
 print_lambda :: TermBody -> String
 print_lambda (FreeVar y) = (getVarIdentyName y)
 print_lambda (App x y) = "[" ++ (print_lambda x) ++ " apply in " ++ (print_lambda y) ++ "]"
-print_lambda (LambdaTerm (Lam x y)) = "(fun" ++ (getVarIdentyName x) ++ " -> " ++ (print_lambda y) ++  ")"
+print_lambda (LambdaTerm (Lam x y)) = "(fun " ++ (getVarIdentyName x) ++ " -> " ++ (print_lambda y) ++  ")"
 
 showTerms :: [TermBody] -> [String]
 showTerms terms = case terms of
                      (x_ : xs) -> (print_lambda x_) : (showTerms xs)
                      [] -> []
-
+                   
 force :: Lambda -> TermBody
 force (Lambda k) = k
+
+fk :: Data.HashMap.Map String Lambda -> [TermBody]
+fk y = (Prelude.map (\(x, y) -> force y) (toList y))
 
 applyOperarations :: (Definition, State) -> (Definition, State)
 applyOperarations ((Definition k terms []), b) = ((Definition k terms []), b)
@@ -274,7 +277,9 @@ applyOperarations ((Definition k terms (z : zs)), (State a (Erros s))) = applyOp
                                                      Normalization (p, q) -> case (check_type p q) of
                                                       [] -> ((Definition k (insert k (Lambda (applyWithStronglyNormalization (force (terms ! k)))) terms) zs), (State a (Erros s)))
                                                       (x : xs) -> ((Definition k terms zs), (State a (Erros ((x : xs) ++ s))))
-                                                     Show -> ((Definition k terms zs), (State a (Erros ((x : xs) ++ s))))
+                                                     AneParser.Show -> do
+                                                      let a_ = (Print (showTerms (fk terms)))
+                                                      ((Definition k terms zs), (State (a_ : a)) (Erros s))
                                                                                        
                                                      _ -> ((Definition k terms zs), (State a (Erros s))))
    where 
@@ -292,7 +297,7 @@ print_assumptions t (x : xs) = case x of
                                  case z of
                                     No -> 
                                         putStrLn (x ++ " isn't equal a " ++ y) >> print_assumptions No xs
-                                    Yes -> print_assumptions No xs
+                                    Yes -> print_assumptions t xs
                                 Assume_Reducible x y -> 
                                  case y of
                                     No -> 
@@ -303,6 +308,7 @@ print_assumptions t (x : xs) = case x of
                                     No -> 
                                        putStrLn (x ++ " can't be finish") >> print_assumptions No xs
                                     Yes -> print_assumptions t xs
+                                Print x -> print x >> print_assumptions t xs
 
 printState :: State -> IO ()
 printState (State a (Erros [])) = return ()
