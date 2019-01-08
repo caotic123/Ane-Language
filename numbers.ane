@@ -1,0 +1,12 @@
+Definition : TypedNaturalNumbers.
+Term Zero : λx -> λf -> (f x).
+Term S : λf -> λx -> λa -> ((f (a x)) a).
+Term One : λi -> (((S Zero) (λi -> i)) (λt -> t)).
+Term test : λi -> i.
+End_Terms.
+Type of Zero is (* -> ((* -> *) -> *)).
+Type of S is ((* -> ((* -> *) -> *)) -> (* -> ((* -> *) -> *))).
+
+Normalization of test strongly by (* -> *).
+
+End_Definition.
