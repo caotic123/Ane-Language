@@ -3,7 +3,25 @@
 Ane is a tool-language to analyze lambda terms that's ensure a real time manipulation of lambda terms.
 Ane uses total untyped lambda calculus, however you can use typed operations therefore terms can be easily changed and makes assumptions.
 
-For example you need to know if two terms computes in the same way:
+A non-recursive pair example :
+```
+Definition : pair.
+Term pair : λx -> λy -> λf -> λencapsule -> ((f x) y).
+End_Terms.
+
+Reducible pair.
+Type of pair is (* -> (* -> ((* -> (* -> *)) -> (* -> *)))).
+
+Beta-Reduction pair in x in λp -> *.
+Beta-Reduction pair in y in λp -> (* *).
+
+Apply pair.
+Finish as [λx -> λy -> x : (λx -> λp -> *)]
+          [λx -> λy -> y : (λy -> λp -> (* *))].
+End_Definition.
+```
+
+Or you need to know if two terms computes in the same way:
 ```
 Simply Example ::
 Definition : ret.
